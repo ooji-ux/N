@@ -81,6 +81,7 @@ namespace v2rayN.ViewModels
         public ReactiveCommand<Unit, Unit> AddShadowsocksServerCmd { get; }
         public ReactiveCommand<Unit, Unit> AddSocksServerCmd { get; }
         public ReactiveCommand<Unit, Unit> AddTrojanServerCmd { get; }
+        public ReactiveCommand<Unit, Unit> AddNaiveServerCmd { get; }
         public ReactiveCommand<Unit, Unit> AddCustomServerCmd { get; }
         public ReactiveCommand<Unit, Unit> AddServerViaClipboardCmd { get; }
         public ReactiveCommand<Unit, Unit> AddServerViaScanCmd { get; }
@@ -163,6 +164,8 @@ namespace v2rayN.ViewModels
 
         [Reactive]
         public bool BlRouting { get; set; }
+        [Reactive]
+        public bool RoutingEnable { get; set; }
         [Reactive]
         public int SystemProxySelected { get; set; }
         #endregion
@@ -290,6 +293,10 @@ namespace v2rayN.ViewModels
             AddTrojanServerCmd = ReactiveCommand.Create(() =>
             {
                 EditServer(true, EConfigType.Trojan);
+            });
+            AddNaiveServerCmd = ReactiveCommand.Create(() =>
+            {
+                EditServer(true, EConfigType.Naive);
             });
             AddCustomServerCmd = ReactiveCommand.Create(() =>
             {
@@ -789,17 +796,21 @@ namespace v2rayN.ViewModels
                     RunningServerDisplay =
                     RunningServerToolTipText = ResUI.CheckServerSettings;
                 }
+
+                RoutingEnable = true;
+                if (SelectedProfile.configType == EConfigType.Naive) RoutingEnable = false;
+
             }));
         }
 
         private void RefreshServersMenu()
         {
             _servers.Clear();
-            if (_lstProfile.Count > _config.guiItem.trayMenuServersLimit)
-            {
-                BlServers = false;
-                return;
-            }
+            //if (_lstProfile.Count > _config.guiItem.trayMenuServersLimit)
+            //{
+            //   BlServers = false;
+            //   return;
+            //}
 
             BlServers = true;
             for (int k = 0; k < _lstProfile.Count; k++)
@@ -1699,8 +1710,8 @@ namespace v2rayN.ViewModels
                 {
                     StringBuilder sb2 = new();
                     sb2.Append($"[{Global.InboundSocks}:{LazyConfig.Instance.GetLocalPort(Global.InboundSocks2)}]");
-                    sb2.Append(" | ");
-                    sb2.Append($"[{Global.InboundHttp}:{LazyConfig.Instance.GetLocalPort(Global.InboundHttp2)}]");
+                    //sb2.Append(" | ");
+                    //sb2.Append($"[{Global.InboundHttp}:{LazyConfig.Instance.GetLocalPort(Global.InboundHttp2)}]");
                     InboundLanDisplay = $"{ResUI.LabLAN}:{sb2}";
                 }
                 else

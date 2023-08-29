@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
 using System.IO;
+using System.Net.NetworkInformation;
+using System.Net;
 using System.Text;
 using v2rayN.Mode;
 using v2rayN.Resx;
@@ -71,6 +73,7 @@ namespace v2rayN.Handler
         public int LoadCoreConfigString(Config config, List<ServerTestItem> _selecteds)
         {
             int pid = -1;
+
             string configStr = CoreConfigHandler.GenerateClientSpeedtestConfigString(config, _selecteds, out string msg);
             if (configStr == "")
             {
@@ -82,6 +85,86 @@ namespace v2rayN.Handler
                 pid = CoreStartViaString(configStr);
             }
             return pid;
+        }
+
+        public void LoadCoreConfigString2(Config config, List<ServerTestItem> _selecteds)
+        {
+            string configStr;
+
+            foreach (var it in _selecteds)
+            {
+                List<IPEndPoint> lstIpEndPoints = new();
+                List<TcpConnectionInformation> lstTcpConns = new();
+
+                try
+                {
+                    lstIpEndPoints.AddRange(
+                        IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpListeners());
+                    lstIpEndPoints.AddRange(
+                        IPGlobalProperties.GetIPGlobalProperties().GetActiveUdpListeners());
+                    lstTcpConns.AddRange(
+                        IPGlobalProperties.GetIPGlobalProperties().GetActiveTcpConnections());
+                }
+                catch (Exception ex)
+                {
+                    Utils.SaveLog(ex.Message, ex);
+                }
+
+                int httpPort = LazyConfig.Instance.GetLocalPort("speedtest");
+
+                if (it.configType == EConfigType.Custom || it.port <= 0)
+                {
+                    continue;
+                }
+
+                var port = httpPort;
+
+                for (int k = httpPort; k < Global.MaxPort; k++)
+                {
+                    if (lstIpEndPoints?.FindIndex(_it => _it.Port == k) >= 0 || lstTcpConns?.FindIndex(_it => _it.LocalEndPoint.Port == k) >= 0)
+                    {
+                        continue;
+                    }
+
+                    port = k;
+                    httpPort = port + 1;
+                    break;
+                }
+
+                if (lstIpEndPoints?.FindIndex(_it => _it.Port == port) >= 0)
+                {
+                    continue;
+                }
+
+                it.port = port;
+
+                if (it.configType == EConfigType.Naive)
+                {
+                    configStr = CoreConfigHandler.GenerateSpeedtestParamsForClient2(config, it, out string msg);
+                    if (configStr == "")
+                    {
+                        ShowMsg(false, msg);
+                    }
+                    else
+                    {
+                        ShowMsg(false, msg);
+                        it.pid = CoreStartViaParams(configStr);
+                    }
+                } 
+                else
+                {
+                    configStr = CoreConfigHandler.GenerateClientSpeedtestConfigString2(config, it, out string msg2);
+                    if (configStr == "")
+                    {
+                        ShowMsg(false, msg2);
+                    }
+                    else
+                    {
+                        ShowMsg(false, msg2);
+                        it.pid = CoreStartViaString(configStr);
+                    }
+                }
+            }
         }
 
         public void CoreStop()
@@ -196,11 +279,20 @@ namespace v2rayN.Handler
                             ShowMsg(false, msg);
                         }
                     };
+                    p.ErrorDataReceived += (sender, e) =>
+                    {
+                        if (!string.IsNullOrEmpty(e.Data))
+                        {
+                            string msg = e.Data + Environment.NewLine;
+                            ShowMsg(false, msg);
+                        }
+                    };
                 }
                 p.Start();
                 if (displayLog)
                 {
                     p.BeginOutputReadLine();
+                    p.BeginErrorReadLine();
                 }
                 _process = p;
 
@@ -276,6 +368,69 @@ namespace v2rayN.Handler
             }
         }
 
+        private int CoreStartViaParams(string paramsStr)
+        {
+            ShowMsg(false, string.Format(ResUI.StartService, DateTime.Now.ToString()));
+
+            try
+            {
+                var coreInfo = LazyConfig.Instance.GetCoreInfo(ECoreType.naiveproxy);
+                string fileName = CoreFindexe(coreInfo);
+                if (fileName == "") return -1;
+
+                var path = Utils.GetConfigPath();
+
+                Process p = new()
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = fileName,
+                        Arguments = paramsStr,
+                        WorkingDirectory = path,
+                        UseShellExecute = false,
+                        RedirectStandardInput = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        CreateNoWindow = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8
+                    }
+                };
+                p.OutputDataReceived += (sender, e) =>
+                {
+                    if (!String.IsNullOrEmpty(e.Data))
+                    {
+                        string msg = e.Data + Environment.NewLine;
+                        ShowMsg(false, msg);
+                    }
+                };
+                p.ErrorDataReceived += (sender, e) =>
+                {
+                    if (!string.IsNullOrEmpty(e.Data))
+                    {
+                        string msg = e.Data + Environment.NewLine;
+                        ShowMsg(false, msg);
+                    }
+                };
+                p.Start();
+                p.BeginOutputReadLine();
+
+                if (p.WaitForExit(1000))
+                {
+                    throw new Exception(p.StandardError.ReadToEnd());
+                }
+
+                Global.processJob.AddProcess(p.Handle);
+                return p.Id;
+            }
+            catch (Exception ex)
+            {
+                Utils.SaveLog(ex.Message, ex);
+                string msg = ex.Message;
+                ShowMsg(false, msg);
+                return -1;
+            }
+        }
         private void ShowMsg(bool updateToTrayTooltip, string msg)
         {
             _updateFunc(updateToTrayTooltip, msg);

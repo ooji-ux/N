@@ -64,6 +64,9 @@
         public const string vlessProtocolLite = "vless";
         public const string trojanProtocol = "trojan://";
         public const string trojanProtocolLite = "trojan";
+        public const string naiveHttpsProtocol = "naive+https://";
+        public const string naiveQuicProtocol = "naive+quic://";
+        public const string naiveWssProtocol = "naive+wss://";
 
         public const string userEMail = "t@t.tt";
         public const string MyRegPath = "Software\\v2rayNGUI";
@@ -94,6 +97,7 @@
         public static readonly List<string> ssSecuritysInXray = new() { "aes-256-gcm", "aes-128-gcm", "chacha20-poly1305", "chacha20-ietf-poly1305", "xchacha20-poly1305", "xchacha20-ietf-poly1305", "none", "plain", "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm", "2022-blake3-chacha20-poly1305" };
         public static readonly List<string> flows = new() { "", "xtls-rprx-vision", "xtls-rprx-vision-udp443" };
         public static readonly List<string> networks = new() { "tcp", "kcp", "ws", "h2", "quic", "grpc" };
+        public static readonly List<string> networks2 = new() { "ws", "h2", "quic" };
         public static readonly List<string> kcpHeaderTypes = new() { "srtp", "utp", "wechat-video", "dtls", "wireguard" };
         public static readonly List<string> coreTypes = new() { "v2fly", "SagerNet", "Xray", "v2fly_v5" };
         public static readonly List<string> domainStrategys = new() { "AsIs", "IPIfNonMatch", "IPOnDemand" };

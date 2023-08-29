@@ -3,7 +3,7 @@
     [Serializable]
     class ServerSpeedItem : ServerStatItem
     {
-        public long proxyUp
+        /**/public long proxyUp
         {
             get; set;
         }

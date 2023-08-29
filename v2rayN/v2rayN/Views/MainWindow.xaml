@@ -87,6 +87,11 @@
                                     Header="{x:Static resx:ResUI.menuAddTrojanServer}" />
                                 <Separator Margin="-40,5" />
                                 <MenuItem
+                                    x:Name="menuAddNaiveServer"
+                                    Height="{StaticResource MenuItemHeight}"
+                                    Header="{x:Static resx:ResUI.menuAddNaiveServer}" />
+                                <Separator Margin="-40,5" />
+                                <MenuItem
                                     x:Name="menuAddServerViaClipboard"
                                     Height="{StaticResource MenuItemHeight}"
                                     Header="{x:Static resx:ResUI.menuAddServerViaClipboard}" />
@@ -728,7 +733,7 @@
             <tb:TaskbarIcon
                 x:Name="tbNotify"
                 IconSource="/v2rayN.ico"
-                NoLeftClickDelay="True">
+                NoLeftClickDelay="True" Margin="0,-2,0,2">
                 <tb:TaskbarIcon.ContextMenu>
                     <ContextMenu Style="{StaticResource DefContextMenu}">
                         <MenuItem x:Name="menuSystemProxyClear" Height="{StaticResource MenuItemHeight}">

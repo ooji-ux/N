@@ -2,7 +2,7 @@
     "servers": [
       {
         "tag": "out_dns",
-        "address": "8.8.8.8",
+        "address": "tls://8.8.8.8",
         "detour": "proxy"
       },
       {

@@ -13,6 +13,8 @@ namespace v2rayN.Mode
             configVersion = 2;
             address = string.Empty;
             port = 0;
+            username = string.Empty;
+            password = string.Empty;
             id = string.Empty;
             alterId = 0;
             security = string.Empty;
@@ -52,6 +54,7 @@ namespace v2rayN.Mode
                 case EConfigType.Socks:
                 case EConfigType.VLESS:
                 case EConfigType.Trojan:
+                case EConfigType.Naive:
                     summary += string.Format("{0}({1}:{2})", remarks, addr, port);
                     break;
                 default:
@@ -104,6 +107,17 @@ namespace v2rayN.Mode
         /// 远程服务器端口
         /// </summary>
         public int port { get; set; }
+
+        /// <summary>
+        /// 远程服务器认证用户名
+        /// </summary>
+        public string username { get; set; }
+
+        /// <summary>
+        /// 远程服务器认证密码
+        /// </summary>
+        public string password { get; set; }
+
         /// <summary>
         /// 远程服务器ID
         /// </summary>

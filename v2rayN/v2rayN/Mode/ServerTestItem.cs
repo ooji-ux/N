@@ -9,5 +9,6 @@
         public EConfigType configType { get; set; }
         public bool allowTest { get; set; }
         public int delay { get; set; }
+        public int pid { get; set; }
     }
 }

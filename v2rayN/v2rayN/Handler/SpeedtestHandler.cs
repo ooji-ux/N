@@ -2,6 +2,7 @@
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Security.Cryptography;
 using v2rayN.Mode;
 using v2rayN.Resx;
 
@@ -78,10 +79,10 @@ namespace v2rayN.Handler
                     Task.Run(RunTcping);
                     break;
                 case ESpeedActionType.Realping:
-                    Task.Run(RunRealPing);
+                    Task.Run(RunRealPing2);
                     break;
                 case ESpeedActionType.Speedtest:
-                    Task.Run(RunSpeedTestAsync);
+                    Task.Run(RunSpeedTestAsync2);
                     break;
                 case ESpeedActionType.Mixedtest:
                     Task.Run(RunMixedtestAsync);
@@ -200,6 +201,59 @@ namespace v2rayN.Handler
             return Task.CompletedTask;
         }
 
+        private Task RunRealPing2()
+        {
+            try
+            {
+                string msg = string.Empty;
+
+                _coreHandler.LoadCoreConfigString2(_config, _selecteds);
+
+                DownloadHandle downloadHandle = new DownloadHandle();
+                //Thread.Sleep(5000);
+                List<Task> tasks = new();
+                foreach (var it in _selecteds)
+                {
+                    if (it.pid < 0)
+                    {
+                        UpdateFunc("", ResUI.FailedToRunCore);
+                        continue;
+                    }
+                    if (!it.allowTest) continue;
+                    if (it.configType == EConfigType.Custom) continue;
+
+                    tasks.Add(Task.Run(() =>
+                    {
+                        try
+                        {
+                            WebProxy webProxy = new(Global.Loopback, it.port);
+                            string output = GetRealPingTime(downloadHandle, webProxy);
+
+                            ProfileExHandler.Instance.SetTestDelay(it.indexId, output);
+                            UpdateFunc(it.indexId, output);
+                            int.TryParse(output, out int delay);
+                            it.delay = delay;
+
+                            if (it.pid > 0) _coreHandler.CoreStopPid(it.pid);
+                            ProfileExHandler.Instance.SaveTo();
+                        }
+                        catch (Exception ex)
+                        {
+                            Utils.SaveLog(ex.Message, ex);
+                        }
+                    }));
+                    //Thread.Sleep(100);
+                }
+                Task.WaitAll(tasks.ToArray());
+            }
+            catch (Exception ex)
+            {
+                Utils.SaveLog(ex.Message, ex);
+            }
+
+            return Task.CompletedTask;
+        }
+
         private async Task RunSpeedTestAsync()
         {
             int pid = -1;
@@ -261,6 +315,44 @@ namespace v2rayN.Handler
             ProfileExHandler.Instance.SaveTo();
         }
 
+        private async Task RunSpeedTestAsync2()
+        {
+            _coreHandler.LoadCoreConfigString2(_config, _selecteds);
+
+            string url = _config.speedTestItem.speedTestUrl;
+            var timeout = _config.speedTestItem.speedTestTimeout;
+            var downloadHandle = new DownloadHandle();
+            Parallel.ForEach(_selecteds, (it) =>
+            {
+                if (it.pid < 0)
+                {
+                    UpdateFunc("", ResUI.FailedToRunCore);
+                    return;
+                }
+                if (!it.allowTest || it.configType == EConfigType.Custom) return;
+
+                ProfileExHandler.Instance.SetTestSpeed(it.indexId, "-1");
+                var item = LazyConfig.Instance.GetProfileItem(it.indexId);
+                if (item is null) return;
+
+                var webProxy = new WebProxy(Global.Loopback, it.port);
+                downloadHandle.DownloadDataAsync(url, webProxy, timeout, async (bool success, string msg) =>
+                {
+                    decimal.TryParse(msg, out decimal dec);
+                    if (dec > 0)
+                    {
+                        ProfileExHandler.Instance.SetTestSpeed(it.indexId, msg);
+                    }
+                    UpdateFunc(it.indexId, "", msg);
+
+                }).Wait();
+
+                if (it.pid > 0) _coreHandler.CoreStopPid(it.pid);
+            });
+            UpdateFunc("", ResUI.SpeedtestingCompleted);
+            ProfileExHandler.Instance.SaveTo();
+        }
+
         private async Task RunSpeedTestMulti()
         {
             int pid = -1;
@@ -314,13 +406,60 @@ namespace v2rayN.Handler
             ProfileExHandler.Instance.SaveTo();
         }
 
+        private async Task RunSpeedTestMulti2()
+        {
+            _coreHandler.LoadCoreConfigString(_config, _selecteds);
+
+            string url = _config.speedTestItem.speedTestUrl;
+            var timeout = _config.speedTestItem.speedTestTimeout;
+
+            DownloadHandle downloadHandle = new();
+
+            foreach (var it in _selecteds)
+            {
+                if (it.pid < 0)
+                {
+                    UpdateFunc("", ResUI.FailedToRunCore);
+                    continue;
+                }
+                if (!it.allowTest) continue;
+                if (it.configType == EConfigType.Custom) continue;
+
+                ProfileExHandler.Instance.SetTestSpeed(it.indexId, "-1");
+
+                var item = LazyConfig.Instance.GetProfileItem(it.indexId);
+                if (item is null) continue;
+
+                WebProxy webProxy = new(Global.Loopback, it.port);
+                _ = downloadHandle.DownloadDataAsync(url, webProxy, timeout, async (bool success, string msg) =>
+                {
+                    decimal.TryParse(msg, out decimal dec);
+                    if (dec > 0)
+                    {
+                        ProfileExHandler.Instance.SetTestSpeed(it.indexId, msg);
+                    }
+                    UpdateFunc(it.indexId, "", msg);
+                });
+                Thread.Sleep(2000);
+                if (it.pid > 0)
+                {
+                    _coreHandler.CoreStopPid(it.pid);
+                }
+            }
+
+            Thread.Sleep((timeout + 2) * 1000);
+
+            UpdateFunc("", ResUI.SpeedtestingCompleted);
+            ProfileExHandler.Instance.SaveTo();
+        }
+
         private async Task RunMixedtestAsync()
         {
-            await RunRealPing();
+            await RunRealPing2();
 
             Thread.Sleep(1000);
 
-            await RunSpeedTestMulti();
+            await RunSpeedTestMulti2();
         }
 
         public string GetRealPingTime(DownloadHandle downloadHandle, IWebProxy webProxy)

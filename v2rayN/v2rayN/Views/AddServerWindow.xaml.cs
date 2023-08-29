@@ -50,6 +50,8 @@ namespace v2rayN.Views
                 cmbAlpn.Items.Add(it);
             });
 
+            gridTlsMore.Visibility = Visibility.Hidden;
+
             switch (profileItem.configType)
             {
                 case EConfigType.VMess:
@@ -92,9 +94,29 @@ namespace v2rayN.Views
                         cmbFlow6.Items.Add(it);
                     });
                     break;
-            }
+                case EConfigType.Naive:
+                    cmbCoreType.Visibility = Visibility.Hidden;
+                    gridNaive.Visibility = Visibility.Visible;
 
-            gridTlsMore.Visibility = Visibility.Hidden;
+                    cmbNetwork.Items.Clear();
+                    Global.networks2.ForEach(it =>
+                    {
+                        cmbNetwork.Items.Add(it);
+                    });
+
+                    cmbStreamSecurity.Items.Clear();
+                    cmbStreamSecurity.Items.Add(Global.StreamSecurity);
+
+                    cmbHeaderType.IsEnabled = false;
+
+                    cmbStreamSecurity.SelectedValue = "tls";
+                    gridTlsMore.Visibility = Visibility.Visible;
+                    cmbAlpn.IsEnabled = false;
+                    cmbAllowInsecure.IsEnabled = false;
+                    cmbFingerprint.IsEnabled = false;
+
+                    break;
+            }
 
             this.WhenActivated(disposables =>
             {
@@ -126,6 +148,10 @@ namespace v2rayN.Views
                     case EConfigType.Trojan:
                         this.Bind(ViewModel, vm => vm.SelectedSource.id, v => v.txtId6.Text).DisposeWith(disposables);
                         this.Bind(ViewModel, vm => vm.SelectedSource.flow, v => v.cmbFlow6.Text).DisposeWith(disposables);
+                        break;
+                    case EConfigType.Naive:
+                        this.Bind(ViewModel, vm => vm.SelectedSource.id, v => v.txtId7.Text).DisposeWith(disposables);
+                        this.Bind(ViewModel, vm => vm.SelectedSource.security, v => v.txtSecurity7.Text).DisposeWith(disposables);
                         break;
                 }
                 this.Bind(ViewModel, vm => vm.SelectedSource.network, v => v.cmbNetwork.Text).DisposeWith(disposables);
@@ -271,6 +297,5 @@ namespace v2rayN.Views
         {
             this.Close();
         }
-
     }
 }

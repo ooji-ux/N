@@ -28,7 +28,8 @@ namespace v2rayN.ViewModels
             _noticeHandler = Locator.Current.GetService<NoticeHandler>();
             _view = view;
 
-            if (profileItem.id.IsNullOrEmpty())
+            if (profileItem.id.IsNullOrEmpty() 
+                && profileItem.configType != EConfigType.Naive)
             {
                 profileItem.network = Global.DefaultNetwork;
                 profileItem.headerType = Global.None;
@@ -82,13 +83,15 @@ namespace v2rayN.ViewModels
                     return;
                 }
             }
-            if (SelectedSource.configType != EConfigType.Socks)
+            if (SelectedSource.configType != EConfigType.Socks || SelectedSource.configType != EConfigType.Naive)
             {
-                if (Utils.IsNullOrEmpty(SelectedSource.id))
+                /*
+                 if (Utils.IsNullOrEmpty(SelectedSource.id))
                 {
                     UI.Show(ResUI.FillUUID);
                     return;
                 }
+                */
             }
 
             var item = LazyConfig.Instance.GetProfileItem(SelectedSource.indexId);
@@ -141,6 +144,9 @@ namespace v2rayN.ViewModels
                     break;
                 case EConfigType.Trojan:
                     ret = ConfigHandler.AddTrojanServer(ref _config, item);
+                    break;
+                case EConfigType.Naive:
+                    ret = ConfigHandler.AddNaiveServer(ref _config, item);
                     break;
             }
 

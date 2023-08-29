@@ -1,9 +1,17 @@
-﻿using System.IO;
+﻿using DynamicData;
+using Newtonsoft.Json;
+using NLog;
+using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
+using System.Text;
+using System.Text.RegularExpressions;
+using System.Windows.Forms;
+using System.Windows.Interop;
 using v2rayN.Base;
 using v2rayN.Mode;
 using v2rayN.Resx;
+using static v2rayN.Handler.CoreConfigHandler;
 
 namespace v2rayN.Handler
 {
@@ -16,6 +24,67 @@ namespace v2rayN.Handler
         private static string SampleServer = Global.v2raySampleServer;
 
         #region Generate client configuration
+
+        public interface IConfigFactory<T>
+        {
+            T CreateConfig(ProfileItem node, out string msg);
+
+        }
+
+        public class NaiveConfigFactory : IConfigFactory<NaiveConfig>
+        {
+            public NaiveConfig CreateConfig(ProfileItem node, out string msg)
+            {
+                NaiveConfig naiveConfig = default(NaiveConfig);
+                if (GenerateClientConfigContent(node, false, ref naiveConfig, out msg) != 0)
+                {
+                    return null;
+                }
+                return naiveConfig;
+            }
+        }
+
+        public class V2rayConfigFactory : IConfigFactory<V2rayConfig>
+        {
+            public V2rayConfig CreateConfig(ProfileItem node, out string msg)
+            {
+                V2rayConfig v2rayConfig = default(V2rayConfig);
+                if (GenerateClientConfigContent(node, false, ref v2rayConfig, out msg) != 0)
+                {
+                    return null;
+                }
+                return v2rayConfig;
+            }
+        }
+
+        public static int GenerateClientConfigContent<T>(ProfileItem node, IConfigFactory<T> factory, string? fileName, 
+            out string msg, out string content) where T : new()
+        {
+            content = string.Empty;
+            try
+            {
+                T config = new T();
+
+                config = factory.CreateConfig(node, out msg);
+                if (config == null) return -1;
+
+                if (Utils.IsNullOrEmpty(fileName))
+                {
+                    content = Utils.ToJson(config);
+                }
+                else
+                {
+                    Utils.ToJsonFile(config, fileName, false);
+                }
+            }
+            catch (Exception ex)
+            {
+                Utils.SaveLog("GenerateClientConfigContent", ex);
+                msg = ResUI.FailedGenDefaultConfiguration;
+                return -1;
+            }
+            return 0;
+        }
 
         /// <summary>
         /// Generate client configuration
@@ -35,27 +104,19 @@ namespace v2rayN.Handler
                     msg = ResUI.CheckServerSettings;
                     return -1;
                 }
-
                 msg = ResUI.InitialConfiguration;
-                if (node.configType == EConfigType.Custom)
+
+                switch (node.configType)
                 {
-                    return GenerateClientCustomConfig(node, fileName, out msg);
-                }
-                else
-                {
-                    V2rayConfig? v2rayConfig = null;
-                    if (GenerateClientConfigContent(node, false, ref v2rayConfig, out msg) != 0)
-                    {
-                        return -1;
-                    }
-                    if (Utils.IsNullOrEmpty(fileName))
-                    {
-                        content = Utils.ToJson(v2rayConfig);
-                    }
-                    else
-                    {
-                        Utils.ToJsonFile(v2rayConfig, fileName, false);
-                    }
+                    case EConfigType.Custom:
+                        return GenerateClientCustomConfig(node, fileName, out msg);
+
+                    case EConfigType.Naive:
+                        return GenerateClientConfigContent<NaiveConfig>(node, new NaiveConfigFactory(), fileName, out msg, out content);
+
+                    default:
+                        return GenerateClientConfigContent<V2rayConfig>(node, new V2rayConfigFactory(), fileName, out msg, out content);
+ 
                 }
             }
             catch (Exception ex)
@@ -912,6 +973,98 @@ namespace v2rayN.Handler
             return 0;
         }
 
+        public static int GenerateNaiveConfigContent(ProfileItem node, ref NaiveConfig? naiveConfig)
+        {
+            const string socksProtocol = "socks";
+            const string localhost = "127.0.0.1";
+            const int defaultPort = 10808;
+
+            try
+            {
+                naiveConfig = new NaiveConfig();
+
+                var localPort = LazyConfig.Instance.GetConfig().inbound[0];
+
+                string listenAddress = localPort.allowLANConn ? "0.0.0.0" : localhost;
+                int port = localPort.newPort4LAN ? localPort.localPort : defaultPort;
+
+                var ipAddress = IPAddress.None;
+                bool isIpAddress = IPAddress.TryParse(node.address, out ipAddress);
+                var domain = (isIpAddress && ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) ||
+                             (isIpAddress && ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+                             ? node.requestHost
+                             : node.address;
+
+                string user = node.username;
+                string password = node.password;
+
+                List<string> listenlList = new List<string>
+                {
+                    $"http://{listenAddress}:{port + 1}",
+                    $"socks://{listenAddress}:{port}"
+                };
+
+                naiveConfig.listen = listenlList;
+
+                switch (node.network)
+                {
+                    case "ws":
+                        naiveConfig.proxy = new StringBuilder("wss://").Append(domain).Append(":").Append(node.port).Append(node.path).ToString();
+                        break;
+                    case "quic":
+                        naiveConfig.proxy = new StringBuilder("quic://").Append(user)
+                            .Append(":").Append(password).Append("@").Append(node.address).Append(":").Append(node.port).ToString();
+                        break;
+                    default:
+                        naiveConfig.proxy = new StringBuilder("https://").Append(user)
+                            .Append(":").Append(password).Append("@").Append(node.address).Append(":").Append(node.port).ToString();
+                        break;
+                }
+
+                if (!string.IsNullOrEmpty(node.sni)) naiveConfig.host_resolver_rules = new StringBuilder("MAP ")
+                        .Append(node.sni).Append(" ").Append(node.address).ToString();
+
+                naiveConfig.insecure_concurrency = 4;
+            }
+            catch (Exception ex)
+            {
+                Utils.SaveLog("GenerateClientCustomConfig", ex);
+                return -1;
+            }
+            return 0;
+        }
+
+        public static int GenerateClientConfigContent(ProfileItem node, bool blExport, ref NaiveConfig? naiveConfig, out string msg)
+        {
+            try
+            {
+                const string socksProtocol = "socks";
+                const string localhost = "127.0.0.1";
+                const int defaultPort = 10808;
+
+                if (node == null)
+                {
+                    msg = ResUI.CheckServerSettings;
+                    return -1;
+                }
+
+                msg = ResUI.InitialConfiguration;
+                if (GenerateNaiveConfigContent(node, ref naiveConfig) == -1)
+                {
+                    msg = ResUI.FailedGenDefaultConfiguration;
+                    return -1;
+                }
+                msg = string.Format(ResUI.SuccessfulConfiguration, "");
+            }
+            catch (Exception ex)
+            {
+                Utils.SaveLog("GenerateClientConfig", ex);
+                msg = ResUI.FailedGenDefaultConfiguration;
+                return -1;
+            }
+            return 0;
+        }
+
         public static int GenerateClientConfigContent(ProfileItem node, bool blExport, ref V2rayConfig? v2rayConfig, out string msg)
         {
             try
@@ -1349,7 +1502,6 @@ namespace v2rayN.Handler
 
         #region Gen speedtest config
 
-
         public static string GenerateClientSpeedtestConfigString(Config config, List<ServerTestItem> selecteds, out string msg)
         {
             try
@@ -1480,6 +1632,168 @@ namespace v2rayN.Handler
                     v2rayConfig.routing.rules.Add(rule);
                 }
 
+                //msg = string.Format(ResUI.SuccessfulConfiguration"), node.getSummary());
+                return Utils.ToJson(v2rayConfig);
+            }
+            catch (Exception ex)
+            {
+                Utils.SaveLog(ex.Message, ex);
+                msg = ResUI.FailedGenDefaultConfiguration;
+                return "";
+            }
+        }
+
+        public static string GenerateSpeedtestParamsForClient2(Config config, ServerTestItem selected, out string msg)
+        {
+            try
+            {
+                if (config == null)
+                {
+                    msg = ResUI.CheckServerSettings;
+                    return "";
+                }
+
+                msg = ResUI.InitialConfiguration;
+
+                string result = Utils.GetEmbedText(SampleClient);
+
+                if (Utils.IsNullOrEmpty(result))
+                {
+                    msg = ResUI.FailedGetDefaultConfiguration;
+                    return "";
+                }
+
+                selected.allowTest = true;
+
+                var item = LazyConfig.Instance.GetProfileItem(selected.indexId);
+
+                var ipAddress = IPAddress.None;
+                bool isIpAddress = IPAddress.TryParse(item.address, out ipAddress);
+                var domain = (isIpAddress && ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork) ||
+                             (isIpAddress && ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+                             ? item.requestHost
+                             : item.address;
+
+                string user = item.username;
+                string password = item.password;
+
+                string listenAddress = Global.Loopback;
+                int port = selected.port;
+
+                var listen = $"http://{listenAddress}:{port}";
+                var proxy = "";
+                var host_resolver_rules = "";
+
+                switch (item.network)
+                {
+                    case "ws":
+                        proxy = new StringBuilder("wss://").Append(domain).Append(":").Append(item.port).Append(item.path).ToString();
+                        break;
+                    case "quic":
+                        proxy = new StringBuilder("quic://").Append(user).Append(":")
+                            .Append(password).Append("@").Append(item.address).Append(":").Append(item.port).ToString();
+                        break;
+                    default:
+                        proxy = new StringBuilder("https://").Append(user).Append(":")
+                            .Append(password).Append("@").Append(item.address).Append(":").Append(item.port).ToString();
+                        break;
+                }
+                if (!string.IsNullOrEmpty(item.sni)) host_resolver_rules = new StringBuilder("MAP ").Append(item.sni).Append(" ").Append(item.address).ToString();
+                if (!string.IsNullOrEmpty(item.sni)) host_resolver_rules = $"--host-resolver-rules=\"{host_resolver_rules}\"";
+
+                return $"--listen=\"{listen}\" {host_resolver_rules} --proxy=\"{proxy}\" --log";
+            }
+            catch (Exception ex)
+            {
+                Utils.SaveLog(ex.Message, ex);
+                msg = ResUI.FailedGenDefaultConfiguration;
+                return "";
+            }
+        }
+
+        public static string GenerateClientSpeedtestConfigString2(Config config, ServerTestItem selected, out string msg)
+        {
+            try
+            {
+                if (config == null)
+                {
+                    msg = ResUI.CheckServerSettings;
+                    return "";
+                }
+                msg = ResUI.InitialConfiguration;
+                Config configCopy = Utils.DeepCopy(config);
+                string result = Utils.GetEmbedText(SampleClient);
+                if (Utils.IsNullOrEmpty(result))
+                {
+                    msg = ResUI.FailedGetDefaultConfiguration;
+                    return "";
+                }
+                V2rayConfig? v2rayConfig = Utils.FromJson<V2rayConfig>(result);
+                if (v2rayConfig == null)
+                {
+                    msg = ResUI.FailedGenDefaultConfiguration;
+                    return "";
+                }
+
+                log(configCopy, ref v2rayConfig, false);
+                //routing(config, ref v2rayConfig);
+                //dns(configCopy, ref v2rayConfig);
+                v2rayConfig.inbounds.Clear(); // Remove "proxy" service for speedtest, avoiding port conflicts.
+                int httpPort = LazyConfig.Instance.GetLocalPort("speedtest");
+
+                if (selected.configType == EConfigType.Custom)
+                {
+                    return "";
+                }
+                if (selected.port <= 0)
+                {
+                    return "";
+                }
+                if (selected.configType is EConfigType.VMess or EConfigType.VLESS)
+                {
+                    var item2 = LazyConfig.Instance.GetProfileItem(selected.indexId);
+                    if (item2 is null || Utils.IsNullOrEmpty(item2.id) || !Utils.IsGuidByParse(item2.id))
+                    {
+                        return "";
+                    }
+                }
+                //find unuse port
+
+                selected.allowTest = true;   // 允许测速
+                //inbound
+                Inbounds inbound = new()
+                {
+                    listen = Global.Loopback,
+                    port = selected.port,
+                    protocol = Global.InboundHttp
+                };
+                inbound.tag = Global.InboundHttp + inbound.port.ToString();
+                v2rayConfig.inbounds.Add(inbound);
+                //outbound
+                V2rayConfig? v2rayConfigCopy = Utils.FromJson<V2rayConfig>(result);
+                var item = LazyConfig.Instance.GetProfileItem(selected.indexId);
+                if (item is null)
+                {
+                    return "";
+                }
+                if (item.configType == EConfigType.Shadowsocks && !Global.ssSecuritysInXray.Contains(item.security))
+                {
+                    return "";
+                }
+                outbound(item, ref v2rayConfigCopy);
+                v2rayConfigCopy.outbounds[0].tag = Global.agentTag + inbound.port.ToString();
+                v2rayConfig.outbounds.Add(v2rayConfigCopy.outbounds[0]);
+                //rule
+                RulesItem rule = new()
+                {
+                    inboundTag = new List<string>
+                        {
+                            inbound.tag
+                        },
+                    outboundTag = v2rayConfigCopy.outbounds[0].tag,
+                    type = "field"
+                };
+                v2rayConfig.routing.rules.Add(rule);
                 //msg = string.Format(ResUI.SuccessfulConfiguration"), node.getSummary());
                 return Utils.ToJson(v2rayConfig);
             }

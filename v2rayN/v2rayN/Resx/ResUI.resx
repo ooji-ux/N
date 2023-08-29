@@ -619,6 +619,9 @@
   <data name="menuAddVmessServer" xml:space="preserve">
     <value>Add [VMess] server</value>
   </data>
+  <data name="menuAddNaiveServer" xml:space="preserve">
+    <value>Add [Naive] server</value>
+  </data>
   <data name="menuSelectAll" xml:space="preserve">
     <value>Select All (Ctrl+A)</value>
   </data>
@@ -1140,5 +1143,8 @@
   </data>
   <data name="TbSpiderX" xml:space="preserve">
     <value>SpiderX</value>
+  </data>
+  <data name="ProxyAuthentication" xml:space="preserve">
+    <value>Proxy Authentication</value>
   </data>
 </root>

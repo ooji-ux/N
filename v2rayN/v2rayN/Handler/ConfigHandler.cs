@@ -682,6 +682,27 @@ namespace v2rayN.Handler
             return 0;
         }
 
+        /// <summary>
+        /// 添加服务器或编辑
+        /// </summary>
+        /// <param name="config"></param>
+        /// <param name="profileItem"></param>
+        /// <returns></returns>
+        public static int AddNaiveServer(ref Config config, ProfileItem profileItem, bool toFile = true)
+        {
+            profileItem.configType = EConfigType.Naive;
+            profileItem.coreType = ECoreType.naiveproxy;
+
+            profileItem.address = profileItem.address.TrimEx();
+            profileItem.network = profileItem.network.TrimEx();
+            profileItem.requestHost = profileItem.requestHost.TrimEx();
+            profileItem.path = profileItem.path.TrimEx();
+            profileItem.streamSecurity = profileItem.streamSecurity.TrimEx();
+
+            AddServerCommon(ref config, profileItem, toFile);
+
+            return 0;
+        }
 
         public static int SortServers(ref Config config, string subId, string colName, bool asc)
         {
@@ -1004,6 +1025,13 @@ namespace v2rayN.Handler
                 else if (profileItem.configType == EConfigType.VLESS)
                 {
                     if (AddVlessServer(ref config, profileItem, false) == 0)
+                    {
+                        countServers++;
+                    }
+                }
+                else if (profileItem.configType == EConfigType.Naive)
+                {
+                    if (AddNaiveServer(ref config, profileItem, false) == 0)
                     {
                         countServers++;
                     }

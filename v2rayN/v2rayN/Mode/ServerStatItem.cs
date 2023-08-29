@@ -18,6 +18,7 @@ namespace v2rayN.Mode
         {
             get; set;
         }
+        /**/
         public long todayUp
         {
             get; set;

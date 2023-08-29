@@ -25,9 +25,10 @@
     {
       "type": "socks",
       "tag": "proxy",
-      "udp_fragment": true,
+      "version": "5",
       "server": "127.0.0.1",
-      "server_port": $socksPort$
+      "server_port": $socksPort$,
+      "udp_over_tcp": true
     },
     {
       "type": "block",

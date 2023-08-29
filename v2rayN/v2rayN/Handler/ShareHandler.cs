@@ -1,4 +1,9 @@
-﻿using System.Collections.Specialized;
+﻿using DynamicData;
+using Microsoft.VisualBasic.ApplicationServices;
+using System.Collections.Specialized;
+using System.DirectoryServices.ActiveDirectory;
+using System.Net;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Web;
 using v2rayN.Base;
@@ -30,6 +35,7 @@ namespace v2rayN.Handler
                     EConfigType.Socks => ShareSocks(item),
                     EConfigType.Trojan => ShareTrojan(item),
                     EConfigType.VLESS => ShareVLESS(item),
+                    EConfigType.Naive => ShareNaive(item),
                     _ => null,
                 };
 
@@ -133,6 +139,42 @@ namespace v2rayN.Handler
             item.port);
             url = $"{Global.trojanProtocol}{url}{query}{remark}";
             return url;
+        }
+
+        private static string ShareNaive(ProfileItem node)
+        {
+            string remark = string.IsNullOrEmpty(node.remarks) ? "" : "#" + Utils.UrlEncode(node.remarks);
+
+            string protocol = node.network switch
+            {
+                "ws" => Global.naiveWssProtocol,
+                "quic" => Global.naiveQuicProtocol,
+                _ => Global.naiveHttpsProtocol
+            };
+
+            string host = IPAddress.TryParse(node.address, out var ipAddress) &&
+                          (ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ||
+                           ipAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6)
+                ? node.requestHost
+                : node.address;
+
+            var dicQuery = new Dictionary<string, string>();
+            if (!string.IsNullOrEmpty(node.requestHost))
+            {
+                dicQuery.Add("host-resolver-rules", Utils.UrlEncode($"MAP {node.requestHost} {GetIpv6(node.address)}"));
+            }
+            if (!string.IsNullOrEmpty(node.path))
+            {
+                dicQuery.Add("path", Utils.UrlEncode(node.path));
+            }
+
+            string query = dicQuery.Any() ? "?" + string.Join("&", dicQuery.Select(x => $"{x.Key}={x.Value}")) : "";
+
+            string auth = !string.IsNullOrEmpty(node.username) && !string.IsNullOrEmpty(node.password)
+                ? $"{node.username}:{node.password}@"
+                : "";
+
+            return $"{protocol}{auth}{host}:{node.port}{query}{remark}";
         }
 
         private static string ShareVLESS(ProfileItem item)
@@ -340,7 +382,11 @@ namespace v2rayN.Handler
                 else if (result.StartsWith(Global.vlessProtocol))
                 {
                     profileItem = ResolveStdVLESS(result);
-
+                }
+                else if (result.StartsWith(Global.naiveHttpsProtocol) || result.StartsWith(Global.naiveQuicProtocol) || 
+                    result.StartsWith(Global.naiveWssProtocol))
+                {
+                    profileItem = ResolveStdNaive(result);
                 }
                 else
                 {
@@ -726,6 +772,50 @@ namespace v2rayN.Handler
 
             return item;
         }
+
+        private static ProfileItem ResolveStdNaive(string result)
+        {
+            ProfileItem item = new()
+            {
+                configType = EConfigType.Naive,
+                security = "none"
+            };
+
+            Uri url = new(result);
+            switch (url.Scheme)
+            {
+                case "naive+wss":
+                    item.network = "ws";
+                    break;
+                case "naive+quic":
+                    item.network = "quic";
+                    break;
+                default:
+                    item.network = "http2";
+                    break;
+            }
+            item.address = url.IdnHost;
+            item.port = url.Port;
+            item.remarks = url.GetComponents(UriComponents.Fragment, UriFormat.Unescaped);
+            if (!string.IsNullOrEmpty(url.UserInfo))
+            {
+                item.username = url.UserInfo.Split(':')[0];
+                item.password = url.UserInfo.Split(':')[1];
+            }
+
+            var query = HttpUtility.ParseQueryString(url.Query);
+            item.streamSecurity = "tls";
+            item.path = Utils.UrlDecode(query["path"]) ?? "";
+            if (query.AllKeys.Contains("host-resolver-rules"))
+            {
+                string[] split = Utils.UrlDecode(query["host-resolver-rules"]).Split(' ');
+                item.requestHost = item.sni = split[1];
+                item.address = split[2].Trim('[', ']');
+            }
+
+            return item;
+        }
+
         private static ProfileItem ResolveStdVLESS(string result)
         {
             ProfileItem item = new()

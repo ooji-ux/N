@@ -619,6 +619,9 @@
   <data name="menuAddVmessServer" xml:space="preserve">
     <value>添加[VMess]服务器</value>
   </data>
+  <data name="menuAddNaiveServer" xml:space="preserve">
+    <value>添加[Naive]服务器</value>
+  </data>
   <data name="menuSelectAll" xml:space="preserve">
     <value>全选 (Ctrl+A)</value>
   </data>
@@ -1140,5 +1143,8 @@
   </data>
   <data name="TbSpiderX" xml:space="preserve">
     <value>SpiderX</value>
+  </data>
+  <data name="ProxyAuthentication" xml:space="preserve">
+    <value>代理身份验证(proxy authentication)</value>
   </data>
 </root>

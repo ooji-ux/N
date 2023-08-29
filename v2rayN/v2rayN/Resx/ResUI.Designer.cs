@@ -583,6 +583,15 @@ namespace v2rayN.Resx {
         }
         
         /// <summary>
+        ///   查找类似 Add [Naive] server 的本地化字符串。
+        /// </summary>
+        public static string menuAddNaiveServer {
+            get {
+                return ResourceManager.GetString("menuAddNaiveServer", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   查找类似 Import bulk URL from clipboard (Ctrl+V) 的本地化字符串。
         /// </summary>
         public static string menuAddServerViaClipboard {
@@ -1650,6 +1659,15 @@ namespace v2rayN.Resx {
         public static string PleaseSelectServer {
             get {
                 return ResourceManager.GetString("PleaseSelectServer", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   查找类似 Proxy Authentication 的本地化字符串。
+        /// </summary>
+        public static string ProxyAuthentication {
+            get {
+                return ResourceManager.GetString("ProxyAuthentication", resourceCulture);
             }
         }
         
